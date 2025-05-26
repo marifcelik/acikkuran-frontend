@@ -179,4 +179,137 @@ export {
   BookmarkEmpty,
   BookmarkDate,
   BookmarkContextMenu,
+  BookmarkNotes,
+  BookmarkLabels,
+  BookmarkEditForm,
+  BookmarkSearchContainer,
+  BookmarkSearchInput,
+  BookmarkEditActions,
 };
+
+const BookmarkSearchContainer = styled.div`
+  padding: 15px 20px;
+  border-bottom: 1px solid ${({ theme }) => theme.borderColor};
+`;
+
+const BookmarkSearchInput = styled.input`
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  border-radius: 6px;
+  background-color: ${({ theme }) => theme.inputBackground};
+  color: ${({ theme }) => theme.primaryTextColor};
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.selectBoxFocusedBorderColor};
+    box-shadow: 0 0 0 0.125em ${({ theme }) => theme.selectBoxShadow};
+  }
+`;
+
+const BookmarkNotes = styled.div`
+  margin-top: 12px;
+  font-size: 0.95em;
+  color: ${({ theme }) => theme.primaryTextColor};
+  white-space: pre-wrap;
+
+  strong {
+    font-weight: 600; /* Slightly bolder */
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Display mode for notes text */
+  .notes-display-text {
+    line-height: 1.6;
+    color: ${({ theme }) => theme.neutralDark};
+  }
+  
+  textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid ${({ theme }) => theme.borderColor};
+    border-radius: 6px;
+    font-size: 1em; /* Relative to parent's 0.95em */
+    margin-top: 4px;
+    background-color: ${({ theme }) => theme.inputBackground};
+    color: ${({ theme }) => theme.primaryTextColor};
+    resize: vertical;
+
+    &:focus {
+      outline: none;
+      border-color: ${({ theme }) => theme.selectBoxFocusedBorderColor};
+      box-shadow: 0 0 0 0.125em ${({ theme }) => theme.selectBoxShadow};
+    }
+  }
+`;
+
+const BookmarkLabels = styled.div`
+  margin-top: 12px;
+  font-size: 0.95em;
+  color: ${({ theme }) => theme.primaryTextColor};
+
+  strong {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .labels-display-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px; /* Gap between tags */
+  }
+
+  span.label-tag {
+    display: inline-block;
+    background-color: ${({ theme }) => theme.secondaryColor};
+    color: ${({ theme }) => theme.primaryDark}; /* Ensure contrast */
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em; /* Relative to parent's 0.95em */
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid ${({ theme }) => theme.borderColor};
+    border-radius: 6px;
+    font-size: 1em; /* Relative to parent's 0.95em */
+    margin-top: 4px;
+    background-color: ${({ theme }) => theme.inputBackground};
+    color: ${({ theme }) => theme.primaryTextColor};
+
+    &:focus {
+      outline: none;
+      border-color: ${({ theme }) => theme.selectBoxFocusedBorderColor};
+      box-shadow: 0 0 0 0.125em ${({ theme }) => theme.selectBoxShadow};
+    }
+  }
+`;
+
+const BookmarkEditForm = styled.div`
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Increased gap */
+
+  label { /* Styling for labels of input fields */
+    font-weight: 500; /* Less bold than strong */
+    font-size: 0.9em; /* Relative to parent (BookmarkNotes/Labels) */
+    color: ${({ theme }) => theme.neutralDark};
+    margin-bottom: 3px; /* Space between label and input */
+    display: block;
+  }
+`;
+
+const BookmarkEditActions = styled.div`
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid ${({ theme }) => theme.borderColor};
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+`;

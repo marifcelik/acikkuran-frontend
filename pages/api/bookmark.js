@@ -9,9 +9,8 @@ export default async (req, res) => {
   const session = await getServerSession(req, res, authOptions);
 
   if (session) {
-    const { action, type, bookmarkItem, bookmarkKey, verseId } = JSON.parse(
-      req.body
-    );
+    const { action, type, bookmarkItem, bookmarkKey, verseId, labels, notes } =
+      JSON.parse(req.body);
     const token = await getToken({
       req,
       secret,
@@ -29,6 +28,8 @@ export default async (req, res) => {
             $bookmarkItem: jsonb!
             $bookmarkKey: String!
             $verseId: Int
+            $labels: jsonb
+            $notes: String
           ) {
             insert_users_bookmarks_one(
               object: {
@@ -37,10 +38,12 @@ export default async (req, res) => {
                 user_id: $userId
                 bookmarkItem: $bookmarkItem
                 bookmarkKey: $bookmarkKey
+                labels: $labels
+                notes: $notes
               }
               on_conflict: {
                 constraint: users_bookmarks_bookmarkKey_user_id_key
-                update_columns: updated_at
+                update_columns: [updated_at, labels, notes]
               }
             ) {
               id
@@ -74,6 +77,8 @@ export default async (req, res) => {
         mutationVariables.bookmarkItem = bookmarkItem;
         mutationVariables.type = type;
         mutationVariables.verseId = verseId;
+        mutationVariables.labels = labels || [];
+        mutationVariables.notes = notes || "";
       }
 
       const data = await request(

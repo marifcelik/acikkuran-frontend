@@ -28,9 +28,15 @@ import {
   BookmarkContainer,
   BookmarkContextMenu,
   BookmarkDate,
+  BookmarkEditForm,
   BookmarkEmpty,
+  BookmarkLabels,
   BookmarkList,
   BookmarkLoading,
+  BookmarkNotes,
+  BookmarkSearchContainer, // Added
+  BookmarkSearchInput,   // Added
+  BookmarkEditActions,   // Added
   BookmarkVerse,
   BookmarkVerseArabic,
   BookmarkVerseNumber,
@@ -65,6 +71,10 @@ const BookmarksModal = (props) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginRequired, setIsLoginRequired] = useState(false);
   const [_, setModalInfo] = useRecoilState(modalState);
+  const [searchTerm, setSearchTerm] = useState("");
+  // For per-item editing state:
+  // editingStates will store { bookmarkId: { notes: string, labels: string[] } }
+  const [editingStates, setEditingStates] = useState({});
 
   const MODAL_WIDTH = 900;
 
@@ -105,20 +115,132 @@ const BookmarksModal = (props) => {
     );
   };
 
-  const getBookmarks = async () => {
-    const data = await fetchJson(`/api/bookmarks?author=${authorId}`);
+  const getBookmarks = async (term = "") => {
+    setIsLoading(true);
+    const data = await fetchJson(
+      `/api/bookmarks?author=${authorId}&searchTerm=${term}`
+    );
     data?.users_bookmarks && setBookmarks(data?.users_bookmarks);
     setIsLoading(false);
   };
 
   useEffect(() => {
     if (session?.user?.id) {
-      getBookmarks();
+      getBookmarks(searchTerm);
     } else {
       setIsLoading(false);
       setIsLoginRequired(true);
     }
-  }, []);
+  }, [session, searchTerm]); // Re-fetch if session or searchTerm changes
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  // Basic debounce for search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (session?.user?.id) {
+        getBookmarks(searchTerm);
+      }
+    }, 500); // 500ms debounce
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm, session, authorId]); // Added authorId as a dependency
+
+  // --- Edit, Save, Cancel Handlers for per-item state ---
+  const handleEdit = (bookmark) => {
+    setEditingStates((prev) => ({
+      ...prev,
+      [bookmark.id]: {
+        notes: bookmark.notes || "",
+        labels: bookmark.labels || [],
+      },
+    }));
+  };
+
+  const handleCancelEdit = (bookmarkId) => {
+    setEditingStates((prev) => {
+      const newState = { ...prev };
+      delete newState[bookmarkId];
+      return newState;
+    });
+  };
+
+  const handleNoteChange = (bookmarkId, newNotes) => {
+    setEditingStates((prev) => ({
+      ...prev,
+      [bookmarkId]: {
+        ...(prev[bookmarkId] || {}),
+        notes: newNotes,
+      },
+    }));
+  };
+
+  const handleLabelsChange = (bookmarkId, newLabelsString) => {
+    const newLabelsArray = newLabelsString.split(",").map(s => s.trim()).filter(s => s);
+    setEditingStates((prev) => ({
+      ...prev,
+      [bookmarkId]: {
+        ...(prev[bookmarkId] || {}),
+        labels: newLabelsArray,
+      },
+    }));
+  };
+
+  const handleSave = async (bookmarkToSave) => {
+    const editState = editingStates[bookmarkToSave.id];
+    if (!editState) return; // Should not happen if UI is correct
+
+    const verseId = bookmarkToSave.verse?.id || bookmarkToSave.verse_id;
+    if (!verseId) {
+      toast.error(t("bookmark__error_missing_verse_id", "Missing verse information to save."));
+      return;
+    }
+
+    const values = {
+      bookmarkKey: bookmarkToSave.bookmarkKey,
+      action: "add",
+      verseId: verseId,
+      type: bookmarkToSave.type,
+      bookmarkItem: bookmarkToSave.bookmarkItem,
+      labels: editState.labels,
+      notes: editState.notes,
+    };
+
+    toast.promise(
+      fetch(`/api/bookmark`, {
+        method: "POST",
+        body: JSON.stringify(values),
+      }).then(async (res) => {
+        if (res.ok) {
+          setBookmarks(
+            bookmarks.map((b) =>
+              b.id === bookmarkToSave.id
+                ? { ...b, notes: editState.notes, labels: editState.labels, updated_at: new Date().toISOString() }
+                : b
+            )
+          );
+          handleCancelEdit(bookmarkToSave.id); // Exit edit mode for this item
+          return Promise.resolve();
+        } else {
+          const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+          return Promise.reject(new Error(errorData.error || t("bookmark__save_error_detailed", "Failed to save. Please try again.")));
+        }
+      }),
+      {
+        loading: t("bookmark__save_loading", "Saving..."),
+        success: t("bookmark__save_success", "Bookmark saved!"),
+        error: (err) => err.message || t("bookmark__save_error", "Error saving bookmark!"),
+      },
+      {
+        success: { icon: <RiBookmark2Fill /> },
+        error: { icon: <RiBookmarkFill color="#c20000" /> },
+      }
+    );
+  };
 
   return (
     <BaseModal
@@ -129,15 +251,45 @@ const BookmarksModal = (props) => {
       contentStyle={{ padding: 0 }}
     >
       <BookmarkContainer>
+        <BookmarkSearchContainer>
+          <BookmarkSearchInput
+            type="text"
+            placeholder={t("bookmark__search_placeholder", "Search bookmarks...")}
+            value={searchTerm}
+            onChange={handleSearchChange}
+          />
+        </BookmarkSearchContainer>
         {isLoading ? (
           <BookmarkLoading>
             <LoadingBar />
           </BookmarkLoading>
         ) : (
           <BookmarkList>
-            {!bookmarks.length ? (
+            {!bookmarks.length && searchTerm ? (
+               <BookmarkEmpty>
+                 <h2>{t("bookmark__no_results_title", "No Results Found")}</h2>
+                 <p>{t("bookmark__no_results_desc", "Try adjusting your search term.")}</p>
+               </BookmarkEmpty>
+            ) : !bookmarks.length && !isLoginRequired ? (
               <BookmarkEmpty>
-                {isLoginRequired ? (
+                 <>
+                    <h2>{t("bookmark__no_bookmark_title")}</h2>
+                    <p>
+                      <Trans
+                        i18nKey="bookmark__no_bookmark_desc"
+                        components={{ icon: <RiBookmarkLine /> }}
+                      />
+                    </p>
+                  </>
+                  <div className="additional_text">
+                  <div>
+                    <span>—</span>
+                  </div>
+                  <span>{t("bookmark__no_bookmark_desc_2")} </span>
+                </div>
+              </BookmarkEmpty>
+            ) : !bookmarks.length && isLoginRequired ? (
+               <BookmarkEmpty>
                   <>
                     <h2>
                       <RiBookmarkLine size="42" />
@@ -157,31 +309,17 @@ const BookmarksModal = (props) => {
                       </Button>
                     </p>
                   </>
-                ) : (
-                  <>
-                    <h2>{t("bookmark__no_bookmark_title")}</h2>
-
-                    <p>
-                      <Trans
-                        i18nKey="bookmark__no_bookmark_desc"
-                        components={{ icon: <RiBookmarkLine /> }}
-                      />
-                    </p>
-                  </>
-                )}
-                <div className="additional_text">
-                  <div>
-                    <span>—</span>
-                  </div>
-                  <span>{t("bookmark__no_bookmark_desc_2")} </span>
-                </div>
-              </BookmarkEmpty>
+                </BookmarkEmpty>
             ) : (
               bookmarks.map((bookmark) => {
                 const surahNames = {
                   tr: bookmark.verse.surah.name,
                   en: bookmark.verse.surah.name_en,
                 };
+                // Check if the current bookmark is being edited
+                const isCurrentlyEditing = !!editingStates[bookmark.id];
+                const currentEditState = editingStates[bookmark.id] || { notes: '', labels: [] };
+
                 return (
                   <BookmarkVerse key={bookmark.id}>
                     <BookmarkVerseNumber>
@@ -272,6 +410,70 @@ const BookmarksModal = (props) => {
                     <BookmarkVerseTranscription>
                       {bookmark.verse.transcription}
                     </BookmarkVerseTranscription>
+
+                    {/* Display Notes and Labels */}
+                    {isCurrentlyEditing ? (
+                      <BookmarkEditForm>
+                        <BookmarkNotes>
+                          <label htmlFor={`notes-${bookmark.id}`}>{t("bookmark__notes_label", "Notes")}</label>
+                          <textarea
+                            id={`notes-${bookmark.id}`}
+                            value={currentEditState.notes}
+                            onChange={(e) => handleNoteChange(bookmark.id, e.target.value)}
+                            placeholder={t("bookmark__notes_placeholder", "Enter your notes...")}
+                          />
+                        </BookmarkNotes>
+                        <BookmarkLabels>
+                          <label htmlFor={`labels-${bookmark.id}`}>{t("bookmark__labels_label", "Labels (comma-separated)")}</label>
+                          <input
+                            type="text"
+                            id={`labels-${bookmark.id}`}
+                            value={currentEditState.labels.join(", ")}
+                            onChange={(e) => handleLabelsChange(bookmark.id, e.target.value)}
+                            placeholder={t("bookmark__labels_placeholder", "e.g., reflection, important, to-read")}
+                          />
+                        </BookmarkLabels>
+                      </BookmarkEditForm>
+                    ) : (
+                      <>
+                        {bookmark.notes && (
+                          <BookmarkNotes>
+                            <strong>{t("bookmark__notes_heading", "Notes:")}</strong>
+                            <div className="notes-display-text">{bookmark.notes}</div>
+                          </BookmarkNotes>
+                        )}
+                        {bookmark.labels && bookmark.labels.length > 0 && (
+                          <BookmarkLabels>
+                            <strong>{t("bookmark__labels_heading", "Labels:")}</strong>
+                            <div className="labels-display-container">
+                              {bookmark.labels.map((label, index) => (
+                                <span key={index} className="label-tag">
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          </BookmarkLabels>
+                        )}
+                      </>
+                    )}
+
+                    {/* Edit/Save/Cancel Buttons */}
+                    <BookmarkEditActions>
+                      {isCurrentlyEditing ? (
+                        <>
+                          <Button onClick={() => handleSave(bookmark)} size="small" disabled={isLoading}>
+                            {t("bookmark__save_button", "Save")}
+                          </Button>
+                          <Button onClick={() => handleCancelEdit(bookmark.id)} variant="secondary" size="small" disabled={isLoading}>
+                            {t("bookmark__cancel_button", "Cancel")}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button onClick={() => handleEdit(bookmark)} size="small" disabled={isLoading}>
+                          {t("bookmark__edit_button", "Edit")}
+                        </Button>
+                      )}
+                    </BookmarkEditActions>
                   </BookmarkVerse>
                 );
               })

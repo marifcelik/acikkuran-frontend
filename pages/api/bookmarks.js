@@ -9,6 +9,7 @@ export default async (req, res) => {
   const session = await getServerSession(req, res, authOptions);
 
   const author = req.query.author || 105;
+  const searchTerm = req.query.searchTerm;
 
   if (session) {
     const token = await getToken({
@@ -19,14 +20,31 @@ export default async (req, res) => {
 
     if (token) {
       // Signed in
+      let whereClause = "";
+      if (searchTerm) {
+        const searchCondition = `%${searchTerm}%`;
+        whereClause = `
+        where: {
+          _or: [
+            { notes: { _ilike: "${searchCondition}" } },
+            { labels: { _cast: { String: { _ilike: "${searchCondition}" } } } },
+            { verse: { verse: { _ilike: "${searchCondition}" } } },
+            { verse: { transcription: { _ilike: "${searchCondition}" } } },
+            { verse: { translations: { text: { _ilike: "${searchCondition}" } } } }
+          ]
+        }`;
+      }
+
       const query = gql`
         query usersBookmarksQuery {
-          users_bookmarks(order_by: { updated_at: desc }) {
+          users_bookmarks(order_by: { updated_at: desc } ${whereClause}) {
             id
             bookmarkKey
             bookmarkItem
             type
             updated_at
+            notes
+            labels
             verse {
               page
               surah {
